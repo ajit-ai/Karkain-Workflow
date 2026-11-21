@@ -1,0 +1,7 @@
+name = "karkain-workflow"
+version = "0.1.0-dev"
+description = "Stateful workflow step orchestration for Karkain"
+license = "MIT"
+targets = ["native"]
+
+[dependencies]

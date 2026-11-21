@@ -1,0 +1,89 @@
+// Karkain-Workflow - stateful workflow orchestration model.
+// Karkain Language v1.2.0 verified baseline (tag v1.2.0,
+// commit 77d70693e1e3134dac312a303bffafa7d50fa988).
+//
+// Scope boundary: this framework models step ordering and completion
+// state in portable Karkain. It does not persist workflows, run steps
+// automatically or provide durable timers.
+//
+// Representation: [name, index, step, step, ...] with index 0-based.
+
+// new_workflow creates a workflow positioned at the first step.
+public func new_workflow(name, steps) {
+    let w = []
+    w = push(w, name)
+    w = push(w, 0)
+    let i = 0
+    while (i < len(steps)) {
+        w = push(w, steps[i])
+        i = i + 1
+    }
+    return w
+}
+
+// workflow_name returns the workflow name.
+public func workflow_name(workflow) {
+    return workflow[0]
+}
+
+// step_count returns the number of steps.
+public func step_count(workflow) {
+    return len(workflow) - 2
+}
+
+// current_index returns the current step index.
+public func current_index(workflow) {
+    return workflow[1]
+}
+
+// step_at returns the step at an index or "".
+public func step_at(workflow, n) {
+    if n < step_count(workflow) {
+        return workflow[2 + n]
+    }
+    return ""
+}
+
+// current_step returns the active step or "" when complete.
+public func current_step(workflow) {
+    return step_at(workflow, current_index(workflow))
+}
+
+// is_complete reports whether all steps have been advanced past.
+public func is_complete(workflow) {
+    return current_index(workflow) >= step_count(workflow)
+}
+
+// advance moves to the next step, capped at completion.
+public func advance(workflow) {
+    if is_complete(workflow) {
+        return workflow
+    }
+    let out = []
+    out = push(out, workflow[0])
+    out = push(out, workflow[1] + 1)
+    let i = 2
+    while (i < len(workflow)) {
+        out = push(out, workflow[i])
+        i = i + 1
+    }
+    return out
+}
+
+// reset returns the workflow to its first step.
+public func reset(workflow) {
+    let out = []
+    out = push(out, workflow[0])
+    out = push(out, 0)
+    let i = 2
+    while (i < len(workflow)) {
+        out = push(out, workflow[i])
+        i = i + 1
+    }
+    return out
+}
+
+// describe_workflow builds a one-line workflow diagnostic.
+public func describe_workflow(workflow) {
+    return workflow_name(workflow) + ":step=" + str(current_index(workflow)) + "/" + str(step_count(workflow)) + " current=" + current_step(workflow)
+}

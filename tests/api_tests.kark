@@ -1,0 +1,59 @@
+// Native tests for Karkain-Workflow.
+
+func sample_workflow() {
+    return new_workflow("build", ["checkout", "compile", "test"])
+}
+
+func test_new_workflow() {
+    let w = sample_workflow()
+    assert_eq(workflow_name(w), "build")
+    assert_eq(step_count(w), 3)
+    assert_eq(current_index(w), 0)
+}
+
+func test_current_step() {
+    let w = sample_workflow()
+    assert_eq(current_step(w), "checkout")
+    assert_eq(step_at(w, 1), "compile")
+    assert_eq(step_at(w, 9), "")
+}
+
+func test_advance() {
+    let w = advance(sample_workflow())
+    assert_eq(current_index(w), 1)
+    assert_eq(current_step(w), "compile")
+    assert_eq(current_step(sample_workflow()), "checkout")
+}
+
+func test_is_complete() {
+    let w = sample_workflow()
+    assert(is_complete(w) == false)
+    let done = advance(advance(advance(w)))
+    assert(is_complete(done))
+    assert_eq(current_step(done), "")
+}
+
+func test_advance_past_end() {
+    let done = advance(advance(advance(sample_workflow())))
+    let again = advance(done)
+    assert_eq(current_index(again), 3)
+}
+
+func test_reset() {
+    let w = advance(advance(sample_workflow()))
+    let r = reset(w)
+    assert_eq(current_index(r), 0)
+    assert_eq(current_step(r), "checkout")
+    assert_eq(step_count(r), 3)
+}
+
+func test_empty_workflow() {
+    let w = new_workflow("empty", [])
+    assert(is_complete(w))
+    assert_eq(current_step(w), "")
+    assert_eq(step_count(w), 0)
+}
+
+func test_describe_workflow() {
+    assert_eq(describe_workflow(sample_workflow()), "build:step=0/3 current=checkout")
+}

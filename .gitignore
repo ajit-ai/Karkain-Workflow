@@ -48,3 +48,9 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Karkain compiler / test generated artifacts
+.karkain/
+*.test.c
+*.karkain.c
+karkain.lock

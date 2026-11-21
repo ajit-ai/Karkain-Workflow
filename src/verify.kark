@@ -1,0 +1,12 @@
+// Integration verification for the Karkain-Workflow public API.
+import workflow
+
+func main() {
+    let w = new_workflow("release", ["build", "test", "publish"])
+    assert_eq(current_step(w), "build")
+    println(describe_workflow(w))
+    let w2 = advance(advance(w))
+    assert_eq(current_step(w2), "publish")
+    let w3 = advance(w2)
+    assert(is_complete(w3))
+}

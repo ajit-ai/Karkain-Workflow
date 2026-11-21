@@ -1,0 +1,11 @@
+// Karkain-Workflow runnable example: a release workflow.
+import workflow
+
+func main() {
+    let w = new_workflow("release", ["compile", "test", "package", "deploy"])
+    println(describe_workflow(w))
+    w = advance(w)
+    w = advance(w)
+    println(describe_workflow(w))
+    println("complete=" + str(is_complete(w)))
+}
