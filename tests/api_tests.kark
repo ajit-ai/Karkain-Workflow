@@ -57,3 +57,86 @@ func test_empty_workflow() {
 func test_describe_workflow() {
     assert_eq(describe_workflow(sample_workflow()), "build:step=0/3 current=checkout")
 }
+
+// --- Phase 2 regression ---
+
+func test_phase1_regression() {
+    let w = sample_workflow()
+    assert_eq(step_count(w), 3)
+    assert_eq(current_step(w), "checkout")
+    assert_eq(current_step(advance(w)), "compile")
+    let done = advance(advance(advance(w)))
+    assert(is_complete(done))
+    assert_eq(current_step(reset(done)), "checkout")
+}
+
+// --- Phase 2 additions ---
+
+func test_step_definitions() {
+    let s = new_step("compile", "job", "src", "bin")
+    assert_eq(step_name(s), "compile")
+    assert_eq(step_kind(s), "job")
+    assert_eq(step_input(s), "src")
+    assert_eq(step_output(s), "bin")
+    assert(validate_step(s))
+    assert(validate_step(new_step("", "job", "a", "b")) == false)
+}
+
+func test_dependencies_and_cycles() {
+    let deps = workflow_depends(workflow_depends(new_deps(), "compile", "checkout"), "test", "compile")
+    let states = set_step_state(set_step_state(new_step_states(), "checkout", "done"), "compile", "running")
+    assert(deps_met(deps, states, "compile"))
+    assert(deps_met(deps, states, "test") == false)
+    assert(workflow_has_cycle(deps, 8) == false)
+    let cyclic = workflow_depends(deps, "checkout", "test")
+    assert(workflow_has_cycle(cyclic, 8))
+}
+
+func test_step_states() {
+    let s = set_step_state(set_step_state(new_step_states(), "a", "done"), "b", "failed")
+    assert_eq(step_state(s, "a"), "done")
+    assert_eq(step_state(s, "b"), "failed")
+    assert_eq(step_state(s, "c"), "missing")
+}
+
+func test_conditions_and_values() {
+    let c = new_condition("step1", "mode", "fast")
+    let values = ["mode", "fast"]
+    assert(condition_met(c, values, ""))
+    assert(condition_met(c, ["mode", "slow"], "") == false)
+    assert_eq(get_value(values, "mode", ""), "fast")
+    assert_eq(get_value(values, "none", "x"), "x")
+}
+
+func test_retry_and_contracts() {
+    let p = new_retry_policy(3)
+    assert(workflow_should_retry(p, 2))
+    assert(workflow_should_retry(p, 3) == false)
+    assert_eq(timeout_contract(), "workflow.step.timeout(ms)")
+    assert_eq(cancellation_contract(), "workflow.instance.cancel(id)")
+    assert_eq(jobs_contract(), "jobs.schedule(step,job)")
+    assert_eq(event_contract(), "event.publish(workflow,step,outcome)")
+}
+
+func test_compensation_and_recovery() {
+    let c = add_compensation(add_compensation(new_compensations(), "a", "undo-a"), "b", "undo-b")
+    assert_eq(compensation_count(c), 2)
+    let states = set_step_state(new_step_states(), "a", "failed")
+    assert_eq(recovery_plan_count(states, c), 1)
+    assert_eq(recovery_plan_count(new_step_states(), c), 0)
+}
+
+func test_history() {
+    let h = history_record(history_record(new_history(), "a", "done"), "b", "failed")
+    assert_eq(history_count(h), 2)
+    assert_eq(last_outcome(h), "failed")
+    assert_eq(last_outcome(new_history()), "")
+}
+
+func test_workflow_validation() {
+    let w = sample_workflow()
+    assert(validate_workflow(w, new_deps()))
+    let cyclic = workflow_depends(workflow_depends(new_deps(), "a", "b"), "b", "a")
+    assert(validate_workflow(w, cyclic) == false)
+    assert(validate_workflow(new_workflow("empty", []), new_deps()) == false)
+}

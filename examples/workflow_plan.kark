@@ -1,0 +1,17 @@
+// Karkain-Workflow Phase 2 example: plan, dependencies and recovery.
+import workflow
+
+func main() {
+    let w = new_workflow("release", ["checkout", "compile", "test"])
+    let deps = workflow_depends(workflow_depends(new_deps(), "compile", "checkout"), "test", "compile")
+    println("valid=" + str(validate_workflow(w, deps)))
+    println("current=" + current_step(w))
+
+    let states = set_step_state(set_step_state(new_step_states(), "checkout", "done"), "compile", "failed")
+    println("compile=" + step_state(states, "compile"))
+    println("deps_ok=" + str(deps_met(deps, states, "compile")))
+
+    let comp = add_compensation(new_compensations(), "compile", "clean")
+    println("recovery=" + str(recovery_plan_count(states, comp)))
+    println("retry=" + str(workflow_should_retry(new_retry_policy(3), 2)))
+}

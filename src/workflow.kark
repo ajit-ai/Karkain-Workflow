@@ -87,3 +87,228 @@ public func reset(workflow) {
 public func describe_workflow(workflow) {
     return workflow_name(workflow) + ":step=" + str(current_index(workflow)) + "/" + str(step_count(workflow)) + " current=" + current_step(workflow)
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 additions. Phase 1 workflow API is unchanged. Execution is
+// in-process; durable workflow recovery requires persistent storage which is
+// unavailable in the verified v1.2.0 subset.
+
+// new_step creates a step definition with input and output names.
+public func new_step(name, kind, input, output) {
+    let s = []
+    s = push(s, name)
+    s = push(s, kind)
+    s = push(s, input)
+    s = push(s, output)
+    return s
+}
+
+// step_name returns a step name.
+public func step_name(step) { return step[0] }
+
+// step_kind returns a step kind.
+public func step_kind(step) { return step[1] }
+
+// step_input returns a step input name.
+public func step_input(step) { return step[2] }
+
+// step_output returns a step output name.
+public func step_output(step) { return step[3] }
+
+// validate_step rejects empty names or kinds.
+public func validate_step(step) {
+    if len(step_name(step)) == 0 { return false }
+    if len(step_kind(step)) == 0 { return false }
+    return true
+}
+
+// new_deps creates an empty workflow dependency graph.
+public func new_deps() {
+    return []
+}
+
+// workflow_depends records that a step requires another step.
+public func workflow_depends(deps, step, required) {
+    let out = deps
+    out = push(out, step)
+    out = push(out, required)
+    return out
+}
+
+// deps_met reports whether all required steps are done.
+public func deps_met(deps, states, step) {
+    let i = 0
+    while (i < len(deps)) {
+        if deps[i] == step {
+            if step_state(states, deps[i + 1]) != "done" { return false }
+        }
+        i = i + 2
+    }
+    return true
+}
+
+// workflow_reachable performs a bounded dependency walk.
+public func workflow_reachable(deps, from, target, depth) {
+    if from == target { return true }
+    if depth == 0 { return false }
+    let i = 0
+    while (i < deps_len(deps)) {
+        if deps[i] == from {
+            if workflow_reachable(deps, deps[i + 1], target, depth - 1) { return true }
+        }
+        i = i + 2
+    }
+    return false
+}
+
+// deps_len returns the number of edge elements.
+public func deps_len(deps) { return len(deps) }
+
+// workflow_has_cycle reports a dependency cycle.
+public func workflow_has_cycle(deps, depth) {
+    let i = 0
+    while (i < deps_len(deps)) {
+        if workflow_reachable(deps, deps[i + 1], deps[i], depth) { return true }
+        i = i + 2
+    }
+    return false
+}
+
+// new_step_states creates a step state store.
+public func new_step_states() {
+    return []
+}
+
+// set_step_state records a step state.
+public func set_step_state(states, step, state) {
+    let out = []
+    out = push(out, step)
+    out = push(out, state)
+    let i = 0
+    while (i < len(states)) {
+        if states[i] == step {
+            i = i + 2
+        } else {
+            out = push(out, states[i])
+            out = push(out, states[i + 1])
+            i = i + 2
+        }
+    }
+    out = push(out, step)
+    out = push(out, state)
+    return out
+}
+
+// step_state returns a recorded state or "missing".
+public func step_state(states, step) {
+    let i = 0
+    while (i < len(states)) {
+        if states[i] == step { return states[i + 1] }
+        i = i + 2
+    }
+    return "missing"
+}
+
+// new_condition creates a conditional branch model.
+public func new_condition(step, field, value) {
+    let c = []
+    c = push(c, step)
+    c = push(c, field)
+    c = push(c, value)
+    return c
+}
+
+// condition_met reports whether a condition matches supplied values.
+public func condition_met(condition, values, fallback) {
+    return get_value(values, condition[1], fallback) == condition[2]
+}
+
+// get_value looks up a key in a [key,value] pair array.
+public func get_value(pairs, key, fallback) {
+    let i = 0
+    while (i < len(pairs)) {
+        if pairs[i] == key { return pairs[i + 1] }
+        i = i + 2
+    }
+    return fallback
+}
+
+// new_retry_policy creates a bounded workflow retry policy.
+public func new_retry_policy(max_attempts) {
+    let p = []
+    p = push(p, max_attempts)
+    return p
+}
+
+// workflow_should_retry reports whether another attempt is allowed.
+public func workflow_should_retry(policy, attempts) {
+    return attempts < policy[0]
+}
+
+// timeout_contract documents the missing timeout primitive.
+public func timeout_contract() { return "workflow.step.timeout(ms)" }
+
+// cancellation_contract documents the missing cancellation primitive.
+public func cancellation_contract() { return "workflow.instance.cancel(id)" }
+
+// new_compensations creates an empty compensation store.
+public func new_compensations() {
+    return []
+}
+
+// add_compensation appends a compensating action for a step.
+public func add_compensation(compensations, step, undo) {
+    let out = compensations
+    out = push(out, step)
+    out = push(out, undo)
+    return out
+}
+
+// compensation_count returns the number of compensations.
+public func compensation_count(compensations) { return len(compensations) / 2 }
+
+// recovery_plan_count counts steps needing compensation.
+public func recovery_plan_count(states, compensations) {
+    let n = 0
+    let i = 0
+    while (i < len(compensations)) {
+        if step_state(states, compensations[i]) == "failed" { n = n + 1 }
+        i = i + 2
+    }
+    return n
+}
+
+// new_history creates a workflow history log.
+public func new_history() {
+    return []
+}
+
+// history_record appends a step outcome.
+public func history_record(history, step, outcome) {
+    let out = history
+    out = push(out, step)
+    out = push(out, outcome)
+    return out
+}
+
+// history_count returns the number of recorded outcomes.
+public func history_count(history) { return len(history) / 2 }
+
+// last_outcome returns the most recent outcome or "".
+public func last_outcome(history) {
+    if len(history) == 0 { return "" }
+    return history[len(history) - 1]
+}
+
+// validate_workflow rejects cyclic dependencies and empty workflows.
+public func validate_workflow(workflow, deps) {
+    if step_count(workflow) == 0 { return false }
+    if workflow_has_cycle(deps, 8) { return false }
+    return true
+}
+
+// jobs_contract documents Workflow to Jobs integration.
+public func jobs_contract() { return "jobs.schedule(step,job)" }
+
+// event_contract documents Workflow to Event integration.
+public func event_contract() { return "event.publish(workflow,step,outcome)" }
